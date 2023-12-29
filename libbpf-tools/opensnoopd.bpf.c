@@ -48,6 +48,18 @@ bool trace_allowed(u32 tgid, u32 pid)
 	return true;
 }
 
+
+/* *********************************************************************
+ * Must remove all the filtering logic here, replace with array of
+ * prefixes so that we don't dump *everything* to the calling program.
+ *
+ * As a first start, just remove all the fields from `struct event`, then
+ * call `bpf_perf_event_output()`. We don't need to trace on syscall exit and
+ * enter. Better if we traced only on syscall exit and only issue the
+ * `bpf_perf_event_output()` call when `open` returns non-negative value.
+ */
+#warning Stopped here last
+
 SEC("tracepoint/syscalls/sys_enter_open")
 int tracepoint__syscalls__sys_enter_open(struct trace_event_raw_sys_enter* ctx)
 {

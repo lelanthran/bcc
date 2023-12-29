@@ -461,6 +461,11 @@ void handle_event(void *ctx, int cpu, void *data, __u32 data_sz)
 	int fd, err;
 #endif
 
+#if 1
+	if (regexes_exclude(e.fname))
+		return;
+#endif
+
 	if (data_sz < sizeof(e)) {
  	 	printf("Error: packet too small\n");
  	 	return;
@@ -469,9 +474,6 @@ void handle_event(void *ctx, int cpu, void *data, __u32 data_sz)
 	memcpy(&e, data, sizeof(e));
 
 	/* name filtering is currently done in user space */
-	if (regexes_exclude(e.fname))
-		return;
-
 	/* prepare fields */
 	time(&t);
 	tm = localtime(&t);
