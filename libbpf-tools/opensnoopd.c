@@ -161,6 +161,7 @@ static bool files_create(void)
 		{ FILE_CONFIG, "# Default configuration for opensnoopd.\n"
 				" exclude = ^/proc \n"
 				" exclude = ^/sys \n"
+				" exclude = ^/tmp \n"
 				" exclude = ^/dev \n" },
 		{ FILE_OUT, " Installing opensnoopd ...\n" },
 		{ FILE_ERR, " Installing opensnoopd ...\n" },
@@ -576,12 +577,10 @@ int main(int argc, char **argv)
 	}
 
 	/* initialize global data (filtering options) */
-#if 0
-	obj->rodata->targ_tgid = env.pid;
-	obj->rodata->targ_pid = env.tid;
-	obj->rodata->targ_uid = env.uid;
-	obj->rodata->targ_failed = env.failed;
-#endif
+	obj->rodata->targ_tgid = 0;
+	obj->rodata->targ_pid = 0;
+	obj->rodata->targ_uid = INVALID_UID;
+	obj->rodata->targ_failed = 0;
 
 	/* aarch64 and riscv64 don't have open syscall */
 	if (!tracepoint_exists("syscalls", "sys_enter_open")) {
