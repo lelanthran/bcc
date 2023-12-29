@@ -36,6 +36,7 @@ BZ_APPS = \
 	futexctn \
 	memleak \
 	opensnoop \
+	opensnoopd \
 	#
 
 APPS = \
@@ -61,7 +62,6 @@ APPS = \
 	funclatency \
 	gethostlatency \
 	hardirqs \
-	javagc \
 	klockstat \
 	ksnoop \
 	llcstat \
@@ -92,6 +92,7 @@ APPS = \
 	vfsstat \
 	wakeuptime \
 	$(BZ_APPS) \
+# javagc \
 	#
 
 # export variables that are used in Makefile.btfgen as well.
