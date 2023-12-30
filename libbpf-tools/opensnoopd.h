@@ -1,10 +1,18 @@
-/* SPDX-License-Identifier: (LGPL-2.1 OR BSD-2-Clause) */
+// SPDX-License-Identifier: (LGPL-2.1 OR BSD-2-Clause)
+// Copyright (c) 2024 Rundata Systems, Gauteng, South Africa.
+//
+// Derived from opensnoop from https://github.com/iovisor/bcc
 #ifndef __OPENSNOOPD_H
 #define __OPENSNOOPD_H
 
 #define TASK_COMM_LEN 16
-#define NAME_MAX 255
+#define NAME_MAX 384
 #define INVALID_UID ((uid_t)-1)
+
+#define OPENSNOOPD_ACTION_ERROR     (0)
+#define OPENSNOOPD_ACTION_OPEN      (1)
+#define OPENSNOOPD_ACTION_UNLINK    (2)
+#define OPENSNOOPD_ACTION_RENAME    (3)
 
 struct args_t {
 	const char *fname;
@@ -12,20 +20,11 @@ struct args_t {
 };
 
 struct event {
-#if 0
-	/* user terminology for pid: */
-	__u64 ts;
-	pid_t pid;
-	uid_t uid;
-#endif
+   int action;
 	int ret;
-#if 0
-	int flags;
-	__u64 callers[2];
-	char comm[TASK_COMM_LEN];
-#endif
 	char fname[NAME_MAX];
-   int flags;
+	char fname2[NAME_MAX];
+	int flags;
 };
 
 struct exclusion_list {

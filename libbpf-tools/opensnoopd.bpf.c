@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0
-// Copyright (c) 2024 Lelanthran Manickum
-// Copyright (c) 2024 Lelanthran Manickum
+// Copyright (c) 2024 Rundata Systems, Gauteng, South Africa.
 //
 // Derived from opensnoop from https://github.com/iovisor/bcc
 #include <vmlinux.h>
@@ -22,67 +21,15 @@ struct {
 	__uint(value_size, sizeof(u32));
 } events SEC(".maps");
 
-#if 0
-static __always_inline bool valid_uid(uid_t uid) {
-	return uid != INVALID_UID;
-}
-
 static __always_inline
-bool trace_allowed(u32 tgid, u32 pid)
+int trace_open_enter(struct trace_event_raw_sys_enter* ctx)
 {
-	u32 uid;
-
-	/* filters */
-	if (targ_tgid && targ_tgid != tgid)
-		return false;
-	if (targ_pid && targ_pid != pid)
-		return false;
-	if (valid_uid(targ_uid)) {
-		uid = (u32)bpf_get_current_uid_gid();
-		if (targ_uid != uid) {
-			return false;
-		}
-	}
-	return true;
-}
-#endif
-
-	/*
-	static const struct exclusion_list excl_list[] = {
-		{ "/sys/",      5 },
-		{ "/dev/",      5 },
-		{ "/tmp/",      5 },
-		{ "/lib/",      5 },
-		{ "/proc/",     6 },
-		{ "/usr/lib",   8 },
-		};
-		*/
-#define match(skip,s,s_len,prefix,prefix_len) do {\
-	for (size_t j=0; j<prefix_len && j<s_len; j++) {\
-		if (prefix[j] != s[j]) {\
-			skip = false;\
-		}\
-	}\
-} while (0)
-
-
-SEC("tracepoint/syscalls/sys_enter_open")
-int tracepoint__syscalls__sys_enter_open(struct trace_event_raw_sys_enter* ctx)
-{
-#if 0
-	u64 id = bpf_get_current_pid_tgid();
-	/* use kernel terminology here for tgid/pid: */
-	u32 tgid = id >> 32;
-	u32 pid = id;
-
-	/* store arg info for later lookup */
-	if (trace_allowed(tgid, pid)) {
-		struct args_t args = {};
-		args.fname = (const char *)ctx->args[0];
-		args.flags = (int)ctx->args[1];
-		bpf_map_update_elem(&start, &pid, &args, 0);
-	}
-#endif
+	/* *****************************************************************
+	 * Gotta be honest, this doesn't look correct for my use-case.
+	 * If a process $PID opens two files in two separate threads
+	 * it's quite probable that _exit gets called for the second
+	 * _enter before it gets called for the first _enter.
+	 */
 	struct args_t args = {};
 	args.fname = (const char *)ctx->args[1];
 	args.flags = (int)ctx->args[2];
@@ -93,77 +40,8 @@ int tracepoint__syscalls__sys_enter_open(struct trace_event_raw_sys_enter* ctx)
 	return 0;
 }
 
-SEC("tracepoint/syscalls/sys_enter_openat")
-int tracepoint__syscalls__sys_enter_openat(struct trace_event_raw_sys_enter* ctx)
-{
-#if 0
-	u64 id = bpf_get_current_pid_tgid();
-	/* use kernel terminology here for tgid/pid: */
-	u32 tgid = id >> 32;
-	u32 pid = id;
-
-	/* store arg info for later lookup */
-	if (trace_allowed(tgid, pid)) {
-		struct args_t args = {};
-		args.fname = (const char *)ctx->args[1];
-		args.flags = (int)ctx->args[2];
-		bpf_map_update_elem(&start, &pid, &args, 0);
-	}
-#endif
-
-	struct args_t args = {};
-	args.fname = (const char *)ctx->args[1];
-	args.flags = (int)ctx->args[2];
-	if (args.flags & targ_oflags) {
-		u32 pid = bpf_get_current_pid_tgid();
-		bpf_map_update_elem(&start, &pid, &args, 0);
-	}
-	return 0;
-}
-
-#if 0
 static __always_inline
-int trace_exit(struct trace_event_raw_sys_exit* ctx)
-{
-	struct event event = {};
-	struct args_t *ap;
-	uintptr_t stack[3];
-	int ret;
-	u32 pid = bpf_get_current_pid_tgid();
-
-	ap = bpf_map_lookup_elem(&start, &pid);
-	if (!ap)
-		return 0;	/* missed entry */
-	ret = ctx->ret;
-	if (targ_failed && ret >= 0)
-		goto cleanup;	/* want failed only */
-
-	/* event data */
-	event.pid = bpf_get_current_pid_tgid() >> 32;
-	event.uid = bpf_get_current_uid_gid();
-	bpf_get_current_comm(&event.comm, sizeof(event.comm));
-	bpf_probe_read_user_str(&event.fname, sizeof(event.fname), ap->fname);
-	event.flags = ap->flags;
-	event.ret = ret;
-
-	bpf_get_stack(ctx, &stack, sizeof(stack),
-		      BPF_F_USER_STACK);
-	/* Skip the first address that is usually the syscall it-self */
-	event.callers[0] = stack[1];
-	event.callers[1] = stack[2];
-
-	/* emit event */
-	bpf_perf_event_output(ctx, &events, BPF_F_CURRENT_CPU,
-			      &event, sizeof(event));
-
-cleanup:
-	bpf_map_delete_elem(&start, &pid);
-	return 0;
-}
-#endif
-
-static __always_inline
-int trace_exit(struct trace_event_raw_sys_exit* ctx)
+int trace_open_exit(struct trace_event_raw_sys_exit* ctx)
 {
 	struct event event = {};
 	struct args_t *ap;
@@ -179,7 +57,7 @@ int trace_exit(struct trace_event_raw_sys_exit* ctx)
 		bpf_probe_read_user_str(&event.fname, sizeof(event.fname), ap->fname);
 		event.flags = ap->flags;
 		event.ret = ctx->ret;
-		// bpf_trace_printk("[%s:%s]\n", 9, event.fname, ap->fname);
+		event.action = OPENSNOOPD_ACTION_OPEN;
 
 		/* Emit event */
 		bpf_perf_event_output(ctx, &events, BPF_F_CURRENT_CPU, &event, sizeof(event));
@@ -189,16 +67,95 @@ int trace_exit(struct trace_event_raw_sys_exit* ctx)
 	return 0;
 }
 
+static __always_inline
+int trace_unlink_enter(struct trace_event_raw_sys_enter* ctx)
+{
+	struct args_t args = {};
+	args.fname = (const char *)ctx->args[1];
+	args.flags = (int)ctx->args[2];
+	if (args.flags & targ_oflags) {
+		u32 pid = bpf_get_current_pid_tgid();
+		bpf_map_update_elem(&start, &pid, &args, 0);
+	}
+	return 0;
+}
+
+static __always_inline
+int trace_unlink_exit(struct trace_event_raw_sys_exit* ctx)
+{
+	struct event event = {};
+	struct args_t *ap;
+
+	u32 pid = bpf_get_current_pid_tgid();
+	ap = bpf_map_lookup_elem(&start, &pid);
+	if (!ap)
+		return 0;	/* missed entry */
+
+	/* On error, ignore the open call */
+	if (ctx->ret > 0) {
+		/* Event data */
+		bpf_probe_read_user_str(&event.fname, sizeof(event.fname), ap->fname);
+		event.flags = ap->flags;
+		event.ret = ctx->ret;
+		event.action = OPENSNOOPD_ACTION_UNLINK;
+
+		/* Emit event */
+		bpf_perf_event_output(ctx, &events, BPF_F_CURRENT_CPU, &event, sizeof(event));
+	}
+	/* Clean up the hashmap */
+	bpf_map_delete_elem(&start, &pid);
+	return 0;
+}
+
+#if 0
+/* Cannot easily trace this call, dunno what the $PWD is. Tracing relative
+ * openat calls is non-trivial and involves tracking chdir by PID in a
+ * syscall_enter_chdir() function, then looking up that PID in the
+ * syscall_enter_open() function, and then cleaning that chdir map in
+ * a syscall_enter_process_exit() function.
+ *
+ * For now, let it get indexed by the filetree walker. It'll still show up
+ * in the results, it just won't show up immediately.
+ */
+SEC("tracepoint/syscalls/sys_enter_open")
+int tracepoint__syscalls__sys_enter_open(struct trace_event_raw_sys_enter* ctx)
+{
+	return trace_open_enter(ctx);
+}
+#endif
+
+SEC("tracepoint/syscalls/sys_enter_openat")
+int tracepoint__syscalls__sys_enter_openat(struct trace_event_raw_sys_enter* ctx)
+{
+	return trace_open_enter(ctx);
+}
+
+#if 0
 SEC("tracepoint/syscalls/sys_exit_open")
 int tracepoint__syscalls__sys_exit_open(struct trace_event_raw_sys_exit* ctx)
 {
-	return trace_exit(ctx);
+	return trace_open_exit(ctx);
 }
+#endif
 
 SEC("tracepoint/syscalls/sys_exit_openat")
 int tracepoint__syscalls__sys_exit_openat(struct trace_event_raw_sys_exit* ctx)
 {
-	return trace_exit(ctx);
+	return trace_open_exit(ctx);
 }
+
+SEC("tracepoint/syscalls/sys_enter_unlinkat")
+int tracepoint__syscalls__sys_enter_unlinkat(struct trace_event_raw_sys_enter* ctx)
+{
+	return 0;
+}
+
+SEC("tracepoint/syscalls/sys_exit_unlinkat")
+int tracepoint__syscalls__sys_exit_unlinkat(struct trace_event_raw_sys_exit* ctx)
+{
+   return 0;
+}
+
+
 
 char LICENSE[] SEC("license") = "GPL";

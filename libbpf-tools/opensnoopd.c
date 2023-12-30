@@ -1,7 +1,5 @@
-/* vim: set et ts=3 sts=3 sw=3: */
 // SPDX-License-Identifier: (LGPL-2.1 OR BSD-2-Clause)
-// Copyright (c)2024 Lelanthran Manickum
-// Copyright (c)2024 Lelanthran Manickum
+// Copyright (c) 2024 Rundata Systems, Gauteng, South Africa.
 //
 // Derived from opensnoop from https://github.com/iovisor/bcc
 #include <argp.h>
@@ -163,6 +161,7 @@ static bool configure (const char *key, char *value,
 				goto cleanup;
 			}
 			g_oflags |= flags;
+			printf("Added %s to oflag filter\n", tok);
 		}
 	}
 
@@ -510,91 +509,28 @@ static void sig_int(int signo)
 
 void handle_event(void *ctx, int cpu, void *data, __u32 data_sz)
 {
+	(void)ctx;
+	(void)cpu;
 	struct event e;
-#if 0
-	struct tm *tm;
-	char ts[32];
-	time_t t;
-	int fd, err;
-#endif
 
 	if (data_sz < sizeof(e)) {
- 	 	printf("Error: packet too small\n");
+ 	 	fprintf(stderr, "Error: packet too small\n");
  	 	return;
 	}
 	/* Copy data as alignment in the perf buffer isn't guaranteed. */
 	memcpy(&e, data, sizeof(e));
 
-#if 0
+#if 1
 	if (regexes_exclude(e.fname))
 		return;
 #endif
 
-	/* prepare fields */
-#if 0
-	time(&t);
-	tm = localtime(&t);
-	strftime(ts, sizeof(ts), "%H:%M:%S", tm);
-	if (e.ret >= 0) {
-		fd = e.ret;
-		err = 0;
-	} else {
-		fd = -1;
-		err = - e.ret;
-	}
-#endif
-
-#ifdef USE_BLAZESYM
-	/*
-	if (env.callers)
-		result = blazesym_symbolize(symbolizer, cfgs, 1, (const uint64_t *)&e.callers, 2);
-	*/
-#endif
-
-	/* print output */
-#if 0
-	sps_cnt = 0;
-	if (env.timestamp) {
-		printf("%-8s ", ts);
-		sps_cnt += 9;
-	}
-	if (env.print_uid) {
-		printf("%-7d ", e.uid);
-		sps_cnt += 8;
-	}
-	printf("%-6d %-16s %3d %3d ", e.pid, e.comm, fd, err);
-	sps_cnt += 7 + 17 + 4 + 4;
-	if (env.extended) {
-		printf("%08o ", e.flags);
-		sps_cnt += 9;
-	}
-#endif
-
-	printf("%i:%i:[%s]\n", e.ret, e.flags, e.fname);
-
-#if 0
-#ifdef USE_BLAZESYM
-	for (i = 0; result && i < result->size; i++) {
-		if (result->entries[i].size == 0)
-			continue;
-		sym = &result->entries[i].syms[0];
-
-		for (j = 0; j < sps_cnt; j++)
-			printf(" ");
-		if (sym->line_no)
-			printf("%s:%ld\n", sym->symbol, sym->line_no);
-		else
-			printf("%s\n", sym->symbol);
-	}
-
-	blazesym_result_free(result);
-#endif
-
-#endif
+	printf("%i:%i:%i:[%s]\n", e.action, e.ret, e.flags, e.fname);
 }
 
 void handle_lost_events(void *ctx, int cpu, __u64 lost_cnt)
 {
+	(void)ctx;
 	fprintf(stderr, "Lost %llu events on CPU #%d!\n", lost_cnt, cpu);
 }
 
@@ -638,8 +574,8 @@ int main(int argc, char **argv)
 
 	/* aarch64 and riscv64 don't have open syscall */
 	if (!tracepoint_exists("syscalls", "sys_enter_open")) {
-		bpf_program__set_autoload(obj->progs.tracepoint__syscalls__sys_enter_open, false);
-		bpf_program__set_autoload(obj->progs.tracepoint__syscalls__sys_exit_open, false);
+		bpf_program__set_autoload(obj->progs.tracepoint__syscalls__sys_enter_openat, false);
+		bpf_program__set_autoload(obj->progs.tracepoint__syscalls__sys_exit_openat, false);
 	}
 
 	err = opensnoopd_bpf__load(obj);
@@ -659,23 +595,6 @@ int main(int argc, char **argv)
 		symbolizer = blazesym_new();
 #endif
 
-	/* print headers */
-#if 0
-	if (env.timestamp)
-		printf("%-8s ", "TIME");
-	if (env.print_uid)
-		printf("%-7s ", "UID");
-	printf("%-6s %-16s %3s %3s ", "PID", "COMM", "FD", "ERR");
-	if (env.extended)
-		printf("%-8s ", "FLAGS");
-	printf("%s", "PATH");
-#ifdef USE_BLAZESYM
-	if (env.callers)
-		printf("/CALLER");
-#endif
-#endif
-	printf("\n");
-
 	/* setup event callbacks */
 	pb = perf_buffer__new(bpf_map__fd(obj->maps.events), PERF_BUFFER_PAGES,
 			      handle_event, handle_lost_events, NULL, NULL);
@@ -684,12 +603,6 @@ int main(int argc, char **argv)
 		fprintf(stderr, "failed to open perf buffer: %d\n", err);
 		goto cleanup;
 	}
-
-	/* setup duration */
-#if 0
-	if (env.duration)
-		time_end = get_ktime_ns() + env.duration * NSEC_PER_SEC;
-#endif
 
 	if (signal(SIGINT, sig_int) == SIG_ERR) {
 		fprintf(stderr, "can't set signal handler: %m\n");
@@ -704,10 +617,6 @@ int main(int argc, char **argv)
 			fprintf(stderr, "error polling perf buffer: %m\n");
 			goto cleanup;
 		}
-#if 0
-		if (env.duration && get_ktime_ns() > time_end)
-			goto cleanup;
-#endif
 		/* reset err to return 0 if exiting */
 		err = 0;
 	}
