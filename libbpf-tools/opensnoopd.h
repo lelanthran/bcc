@@ -28,4 +28,9 @@ struct event {
    int flags;
 };
 
+struct exclusion_list {
+	const char *prefix;
+	const size_t len;
+};
+
 #endif /* __OPENSNOOPD_H */

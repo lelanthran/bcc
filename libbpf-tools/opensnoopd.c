@@ -90,20 +90,80 @@ static bool regexes_exclude(const char *fname)
 /* *********************************************************************
  * Some general housekeeping stuff.
  */
-static bool configure (const char *key, const char *value,
+
+static int oflags_lookup(const char *s)
+{
+#define FLAG(x)   { x, #x }
+	static const struct {
+		int iflag;
+		const char *sflag;
+	} flags[] = {
+		// FLAG (O_EXEC),
+		FLAG (O_RDONLY),
+		FLAG (O_RDWR),
+		// FLAG (O_SEARCH),
+		FLAG (O_WRONLY),
+		FLAG (O_APPEND),
+		FLAG (O_CLOEXEC),
+		FLAG (O_CREAT),
+		FLAG (O_DIRECTORY),
+		FLAG (O_DSYNC),
+		FLAG (O_EXCL),
+		FLAG (O_NOCTTY),
+		FLAG (O_NOFOLLOW),
+		FLAG (O_NONBLOCK),
+		FLAG (O_RSYNC),
+		FLAG (O_SYNC),
+		FLAG (O_TRUNC),
+		// FLAG (O_TTY_INIT),
+	};
+
+	static const size_t nflags = sizeof flags/sizeof flags[0];
+
+	for (size_t i=0; i<nflags; i++) {
+		if ((strcmp(s, flags[i].sflag)) == 0) {
+			return flags[i].iflag;
+		}
+	}
+
+	return -1;
+}
+
+static int g_oflags = 0;
+
+static bool configure (const char *key, char *value,
 		const char *fname, size_t line)
 {
 	bool error = true;
 	bool valid = false;
 
 	if ((strcmp(key, "exclude")) == 0) {
+		valid = true;
 		printf("Adding regex to exclusions '%s'\n", value);
 		if (!(regexes_add(value))) {
-			fprintf(stderr, "Failed to add exclusion in [%s:%zu]\n",
-					fname, line);
+			fprintf(stderr, "[%s:%zu] Failed to add exclusion [%s]\n",
+					fname, line, value);
 			goto cleanup;
 		}
+	}
+
+	if ((strcmp(key, "oflags")) == 0) {
 		valid = true;
+		char *tok = NULL;
+		char *src = value;
+		while ((tok = strtok (src, " "))) {
+			src = NULL;
+			if (!tok || tok[0] == 0) {
+				continue;
+			}
+			int flags = oflags_lookup(tok);
+			if (flags < 0) {
+				fprintf(stderr, "[%s:%zu] Unrecognised open flag [%s]\n",
+						fname, line, tok);
+				goto cleanup;
+			}
+			g_oflags |= flags;
+		}
 	}
 
 	if (!valid) {
@@ -159,6 +219,11 @@ static bool files_create(void)
 		const char *content;
 	} files[] = {
 		{ FILE_CONFIG, "# Default configuration for opensnoopd.\n"
+				"\n"
+				"# Only files opened with any of the following flags will be monitored\n"
+				" oflags = O_WRONLY O_RDWR  O_CREAT O_APPEND\n"
+				"\n"
+				"# Specify which patterns to exclude. Repeat the key for each pattern\n"
 				" exclude = ^/proc \n"
 				" exclude = ^/sys \n"
 				" exclude = ^/tmp \n"
@@ -453,17 +518,17 @@ void handle_event(void *ctx, int cpu, void *data, __u32 data_sz)
 	int fd, err;
 #endif
 
-#if 1
-	if (regexes_exclude(e.fname))
-		return;
-#endif
-
 	if (data_sz < sizeof(e)) {
  	 	printf("Error: packet too small\n");
  	 	return;
 	}
 	/* Copy data as alignment in the perf buffer isn't guaranteed. */
 	memcpy(&e, data, sizeof(e));
+
+#if 0
+	if (regexes_exclude(e.fname))
+		return;
+#endif
 
 	/* prepare fields */
 #if 0
@@ -558,7 +623,7 @@ int main(int argc, char **argv)
 
 	err = ensure_core_btf(&open_opts);
 	if (err) {
-		fprintf(stderr, "failed to fetch necessary BTF for CO-RE: %s\n", strerror(-err));
+		fprintf(stderr, "failed to fetch necessary BTF for CO-RE: %m\n");
 		return 1;
 	}
 
@@ -569,10 +634,7 @@ int main(int argc, char **argv)
 	}
 
 	/* initialize global data (filtering options) */
-	obj->rodata->targ_tgid = 0;
-	obj->rodata->targ_pid = 0;
-	obj->rodata->targ_uid = INVALID_UID;
-	obj->rodata->targ_failed = 0;
+	obj->rodata->targ_oflags = g_oflags;
 
 	/* aarch64 and riscv64 don't have open syscall */
 	if (!tracepoint_exists("syscalls", "sys_enter_open")) {
@@ -630,7 +692,7 @@ int main(int argc, char **argv)
 #endif
 
 	if (signal(SIGINT, sig_int) == SIG_ERR) {
-		fprintf(stderr, "can't set signal handler: %s\n", strerror(errno));
+		fprintf(stderr, "can't set signal handler: %m\n");
 		err = 1;
 		goto cleanup;
 	}
@@ -639,7 +701,7 @@ int main(int argc, char **argv)
 	while (!exiting) {
 		err = perf_buffer__poll(pb, PERF_POLL_TIMEOUT_MS);
 		if (err < 0 && err != -EINTR) {
-			fprintf(stderr, "error polling perf buffer: %s\n", strerror(-err));
+			fprintf(stderr, "error polling perf buffer: %m\n");
 			goto cleanup;
 		}
 #if 0

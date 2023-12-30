@@ -7,10 +7,7 @@
 #include <bpf/bpf_helpers.h>
 #include "opensnoopd.h"
 
-const volatile pid_t targ_pid = 0;
-const volatile pid_t targ_tgid = 0;
-const volatile uid_t targ_uid = 0;
-const volatile bool targ_failed = false;
+const volatile int targ_oflags = 0;
 
 struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
@@ -50,6 +47,24 @@ bool trace_allowed(u32 tgid, u32 pid)
 }
 #endif
 
+	/*
+	static const struct exclusion_list excl_list[] = {
+		{ "/sys/",      5 },
+		{ "/dev/",      5 },
+		{ "/tmp/",      5 },
+		{ "/lib/",      5 },
+		{ "/proc/",     6 },
+		{ "/usr/lib",   8 },
+		};
+		*/
+#define match(skip,s,s_len,prefix,prefix_len) do {\
+	for (size_t j=0; j<prefix_len && j<s_len; j++) {\
+		if (prefix[j] != s[j]) {\
+			skip = false;\
+		}\
+	}\
+} while (0)
+
 
 SEC("tracepoint/syscalls/sys_enter_open")
 int tracepoint__syscalls__sys_enter_open(struct trace_event_raw_sys_enter* ctx)
@@ -68,11 +83,13 @@ int tracepoint__syscalls__sys_enter_open(struct trace_event_raw_sys_enter* ctx)
 		bpf_map_update_elem(&start, &pid, &args, 0);
 	}
 #endif
-	u32 pid = bpf_get_current_pid_tgid();
 	struct args_t args = {};
-	args.fname = (const char *)ctx->args[0];
-	args.flags = (int)ctx->args[1];
-	bpf_map_update_elem(&start, &pid, &args, 0);
+	args.fname = (const char *)ctx->args[1];
+	args.flags = (int)ctx->args[2];
+	if (args.flags & targ_oflags) {
+		u32 pid = bpf_get_current_pid_tgid();
+		bpf_map_update_elem(&start, &pid, &args, 0);
+	}
 	return 0;
 }
 
@@ -93,11 +110,14 @@ int tracepoint__syscalls__sys_enter_openat(struct trace_event_raw_sys_enter* ctx
 		bpf_map_update_elem(&start, &pid, &args, 0);
 	}
 #endif
-	u32 pid = bpf_get_current_pid_tgid();
+
 	struct args_t args = {};
-	args.fname = (const char *)ctx->args[0];
-	args.flags = (int)ctx->args[1];
-	bpf_map_update_elem(&start, &pid, &args, 0);
+	args.fname = (const char *)ctx->args[1];
+	args.flags = (int)ctx->args[2];
+	if (args.flags & targ_oflags) {
+		u32 pid = bpf_get_current_pid_tgid();
+		bpf_map_update_elem(&start, &pid, &args, 0);
+	}
 	return 0;
 }
 
@@ -148,23 +168,23 @@ int trace_exit(struct trace_event_raw_sys_exit* ctx)
 	struct event event = {};
 	struct args_t *ap;
 
-	if (ctx->ret < 0)
-		return 0;
-
 	u32 pid = bpf_get_current_pid_tgid();
-
 	ap = bpf_map_lookup_elem(&start, &pid);
 	if (!ap)
 		return 0;	/* missed entry */
 
-	/* event data */
-	bpf_probe_read_user_str(&event.fname, sizeof(event.fname), ap->fname);
-	event.flags = ap->flags;
-	event.ret = ctx->ret;
+	/* On error, ignore the open call */
+	if (ctx->ret > 0) {
+		/* Event data */
+		bpf_probe_read_user_str(&event.fname, sizeof(event.fname), ap->fname);
+		event.flags = ap->flags;
+		event.ret = ctx->ret;
+		// bpf_trace_printk("[%s:%s]\n", 9, event.fname, ap->fname);
 
-	/* emit event */
-	bpf_perf_event_output(ctx, &events, BPF_F_CURRENT_CPU,
-			      &event, sizeof(event));
+		/* Emit event */
+		bpf_perf_event_output(ctx, &events, BPF_F_CURRENT_CPU, &event, sizeof(event));
+	}
+	/* Clean up the hashmap */
 	bpf_map_delete_elem(&start, &pid);
 	return 0;
 }
