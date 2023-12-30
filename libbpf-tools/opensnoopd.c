@@ -446,18 +446,10 @@ static void sig_int(int signo)
 void handle_event(void *ctx, int cpu, void *data, __u32 data_sz)
 {
 	struct event e;
+#if 0
 	struct tm *tm;
-#ifdef USE_BLAZESYM
-	sym_src_cfg cfgs[] = {
-		{ .src_type = SRC_T_PROCESS, .params = { .process = { .pid = e->pid }}},
-	};
-	const blazesym_result *result = NULL;
-	const blazesym_csym *sym;
-	int i, j;
-#endif
 	char ts[32];
 	time_t t;
-#if 0
 	int fd, err;
 #endif
 
@@ -473,12 +465,11 @@ void handle_event(void *ctx, int cpu, void *data, __u32 data_sz)
 	/* Copy data as alignment in the perf buffer isn't guaranteed. */
 	memcpy(&e, data, sizeof(e));
 
-	/* name filtering is currently done in user space */
 	/* prepare fields */
+#if 0
 	time(&t);
 	tm = localtime(&t);
 	strftime(ts, sizeof(ts), "%H:%M:%S", tm);
-#if 0
 	if (e.ret >= 0) {
 		fd = e.ret;
 		err = 0;
@@ -514,7 +505,7 @@ void handle_event(void *ctx, int cpu, void *data, __u32 data_sz)
 	}
 #endif
 
-	printf("%s\n", e.fname);
+	printf("%i:%i:[%s]\n", e.ret, e.flags, e.fname);
 
 #if 0
 #ifdef USE_BLAZESYM
@@ -553,7 +544,6 @@ int main(int argc, char **argv)
 	};
 	struct perf_buffer *pb = NULL;
 	struct opensnoopd_bpf *obj = NULL;
-	__u64 time_end = 0;
 	int err = argp_parse(&argp, argc, argv, 0, NULL, NULL);
 	if (err)
 		return err;

@@ -25,6 +25,7 @@ struct {
 	__uint(value_size, sizeof(u32));
 } events SEC(".maps");
 
+#if 0
 static __always_inline bool valid_uid(uid_t uid) {
 	return uid != INVALID_UID;
 }
@@ -47,22 +48,13 @@ bool trace_allowed(u32 tgid, u32 pid)
 	}
 	return true;
 }
+#endif
 
-
-/* *********************************************************************
- * Must remove all the filtering logic here, replace with array of
- * prefixes so that we don't dump *everything* to the calling program.
- *
- * As a first start, just remove all the fields from `struct event`, then
- * call `bpf_perf_event_output()`. We don't need to trace on syscall exit and
- * enter. Better if we traced only on syscall exit and only issue the
- * `bpf_perf_event_output()` call when `open` returns non-negative value.
- */
-#warning Stopped here last
 
 SEC("tracepoint/syscalls/sys_enter_open")
 int tracepoint__syscalls__sys_enter_open(struct trace_event_raw_sys_enter* ctx)
 {
+#if 0
 	u64 id = bpf_get_current_pid_tgid();
 	/* use kernel terminology here for tgid/pid: */
 	u32 tgid = id >> 32;
@@ -75,12 +67,19 @@ int tracepoint__syscalls__sys_enter_open(struct trace_event_raw_sys_enter* ctx)
 		args.flags = (int)ctx->args[1];
 		bpf_map_update_elem(&start, &pid, &args, 0);
 	}
+#endif
+	u32 pid = bpf_get_current_pid_tgid();
+	struct args_t args = {};
+	args.fname = (const char *)ctx->args[0];
+	args.flags = (int)ctx->args[1];
+	bpf_map_update_elem(&start, &pid, &args, 0);
 	return 0;
 }
 
 SEC("tracepoint/syscalls/sys_enter_openat")
 int tracepoint__syscalls__sys_enter_openat(struct trace_event_raw_sys_enter* ctx)
 {
+#if 0
 	u64 id = bpf_get_current_pid_tgid();
 	/* use kernel terminology here for tgid/pid: */
 	u32 tgid = id >> 32;
@@ -93,9 +92,16 @@ int tracepoint__syscalls__sys_enter_openat(struct trace_event_raw_sys_enter* ctx
 		args.flags = (int)ctx->args[2];
 		bpf_map_update_elem(&start, &pid, &args, 0);
 	}
+#endif
+	u32 pid = bpf_get_current_pid_tgid();
+	struct args_t args = {};
+	args.fname = (const char *)ctx->args[0];
+	args.flags = (int)ctx->args[1];
+	bpf_map_update_elem(&start, &pid, &args, 0);
 	return 0;
 }
 
+#if 0
 static __always_inline
 int trace_exit(struct trace_event_raw_sys_exit* ctx)
 {
@@ -131,6 +137,34 @@ int trace_exit(struct trace_event_raw_sys_exit* ctx)
 			      &event, sizeof(event));
 
 cleanup:
+	bpf_map_delete_elem(&start, &pid);
+	return 0;
+}
+#endif
+
+static __always_inline
+int trace_exit(struct trace_event_raw_sys_exit* ctx)
+{
+	struct event event = {};
+	struct args_t *ap;
+
+	if (ctx->ret < 0)
+		return 0;
+
+	u32 pid = bpf_get_current_pid_tgid();
+
+	ap = bpf_map_lookup_elem(&start, &pid);
+	if (!ap)
+		return 0;	/* missed entry */
+
+	/* event data */
+	bpf_probe_read_user_str(&event.fname, sizeof(event.fname), ap->fname);
+	event.flags = ap->flags;
+	event.ret = ctx->ret;
+
+	/* emit event */
+	bpf_perf_event_output(ctx, &events, BPF_F_CURRENT_CPU,
+			      &event, sizeof(event));
 	bpf_map_delete_elem(&start, &pid);
 	return 0;
 }
