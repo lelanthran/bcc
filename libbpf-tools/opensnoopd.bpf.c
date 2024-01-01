@@ -23,6 +23,13 @@ struct {
 } maps_unlink SEC(".maps");
 
 struct {
+	__uint(type, BPF_MAP_TYPE_HASH);
+	__uint(max_entries, 10240);
+	__type(key, u32);
+	__type(value, struct args_t);
+} maps_chdir SEC(".maps");
+
+struct {
 	__uint(type, BPF_MAP_TYPE_PERF_EVENT_ARRAY);
 	__uint(key_size, sizeof(u32));
 	__uint(value_size, sizeof(u32));
@@ -74,12 +81,12 @@ int trace_open_exit(struct trace_event_raw_sys_exit* ctx)
 	return 0;
 }
 
+
 static __always_inline
 int trace_unlink_enter(struct trace_event_raw_sys_enter* ctx, const char *fname)
 {
 	struct args_t args = {};
 	args.fname = fname;
-	args.flags = 0;
 	/* We really need a way to filter these */
 	u32 pid = bpf_get_current_pid_tgid();
 	bpf_map_update_elem(&maps_unlink, &pid, &args, 0);
@@ -101,7 +108,7 @@ int trace_unlink_exit(struct trace_event_raw_sys_exit* ctx)
 	if (ctx->ret == 0) {
 		/* Event data */
 		bpf_probe_read_user_str(&event.fname, sizeof(event.fname), ap->fname);
-		event.flags = ap->flags;
+		event.flags = 0;
 		event.ret = ctx->ret;
 		event.action = OPENSNOOPD_ACTION_UNLINK;
 
@@ -112,6 +119,45 @@ int trace_unlink_exit(struct trace_event_raw_sys_exit* ctx)
 	bpf_map_delete_elem(&maps_unlink, &pid);
 	return 0;
 }
+
+
+static __always_inline
+int trace_chdir_enter(struct trace_event_raw_sys_enter* ctx)
+{
+	struct args_t args = {};
+	args.fname = (const char *)ctx->args[0];
+	u32 pid = bpf_get_current_pid_tgid();
+	bpf_map_update_elem(&maps_chdir, &pid, &args, 0);
+	return 0;
+}
+
+static __always_inline
+int trace_chdir_exit(struct trace_event_raw_sys_exit* ctx)
+{
+	struct event event = {};
+	struct args_t *ap;
+
+	u32 pid = bpf_get_current_pid_tgid();
+	ap = bpf_map_lookup_elem(&maps_chdir, &pid);
+	if (!ap)
+		return 0;	/* missed entry */
+
+	/* On error, ignore the syscall */
+	if (ctx->ret == 0) {
+		/* Event data */
+		bpf_probe_read_user_str(&event.fname, sizeof(event.fname), ap->fname);
+		event.flags = 0;
+		event.ret = ctx->ret;
+		event.action = OPENSNOOPD_ACTION_CHDIR;
+
+		/* Emit event */
+		bpf_perf_event_output(ctx, &events, BPF_F_CURRENT_CPU, &event, sizeof(event));
+	}
+	/* Clean up the hashmap */
+	bpf_map_delete_elem(&maps_chdir, &pid);
+	return 0;
+}
+
 
 #if 0
 /* Cannot easily trace this call, dunno what the $PWD is. Tracing relative
@@ -136,24 +182,24 @@ int tracepoint__syscalls__sys_exit_open(struct trace_event_raw_sys_exit* ctx)
 }
 #endif
 
+
 SEC("tracepoint/syscalls/sys_enter_openat")
 int tracepoint__syscalls__sys_enter_openat(struct trace_event_raw_sys_enter* ctx)
 {
 	return trace_open_enter(ctx);
 }
-
 SEC("tracepoint/syscalls/sys_exit_openat")
 int tracepoint__syscalls__sys_exit_openat(struct trace_event_raw_sys_exit* ctx)
 {
 	return trace_open_exit(ctx);
 }
 
+
 SEC("tracepoint/syscalls/sys_enter_unlink")
 int tracepoint__syscalls__sys_enter_unlink(struct trace_event_raw_sys_enter* ctx)
 {
 	return trace_unlink_enter(ctx, (const char *)ctx->args[0]);
 }
-
 SEC("tracepoint/syscalls/sys_exit_unlink")
 int tracepoint__syscalls__sys_exit_unlink(struct trace_event_raw_sys_exit* ctx)
 {
@@ -166,11 +212,22 @@ int tracepoint__syscalls__sys_enter_unlinkat(struct trace_event_raw_sys_enter* c
 {
 	return trace_unlink_enter(ctx, (const char *)ctx->args[1]);
 }
-
 SEC("tracepoint/syscalls/sys_exit_unlinkat")
 int tracepoint__syscalls__sys_exit_unlinkat(struct trace_event_raw_sys_exit* ctx)
 {
 	return trace_unlink_exit(ctx);
+}
+
+
+SEC("tracepoint/syscalls/sys_enter_chdir")
+int tracepoint__syscalls__sys_enter_chdir(struct trace_event_raw_sys_enter* ctx)
+{
+	return trace_chdir_enter(ctx);
+}
+SEC("tracepoint/syscalls/sys_exit_chdir")
+int tracepoint__syscalls__sys_exit_chdir(struct trace_event_raw_sys_exit* ctx)
+{
+	return trace_chdir_exit(ctx);
 }
 
 
