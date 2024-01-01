@@ -1,6 +1,10 @@
 #!/bin/bash
 
-# Make sure that the exclusion list does not exclude /tmp
+# Make sure that the exclusion list does not exclude /tmp before running
+# this test.
+#
+# The actions printed to stdout (as of writing) must be in the order
+# specified below in parentheses.
 
 export F=snoopd-test
 

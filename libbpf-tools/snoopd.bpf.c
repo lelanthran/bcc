@@ -4,7 +4,7 @@
 // Derived from opensnoop from https://github.com/iovisor/bcc
 #include <vmlinux.h>
 #include <bpf/bpf_helpers.h>
-#include "opensnoopd.h"
+#include "snoopd.h"
 
 const volatile int targ_oflags = 0;
 
@@ -117,7 +117,7 @@ int tracepoint__syscalls__sys_enter_open(struct trace_event_raw_sys_enter* ctx)
 SEC("tracepoint/syscalls/sys_exit_open")
 int tracepoint__syscalls__sys_exit_open(struct trace_event_raw_sys_exit* ctx)
 {
-	return trace_syscall_exit(ctx, OPENSNOOPD_ACTION_OPEN, &maps_open);
+	return trace_syscall_exit(ctx, SNOOPD_ACTION_OPEN, &maps_open);
 }
 
 /* ******************************************************************** */
@@ -134,7 +134,7 @@ int tracepoint__syscalls__sys_enter_openat(struct trace_event_raw_sys_enter* ctx
 SEC("tracepoint/syscalls/sys_exit_openat")
 int tracepoint__syscalls__sys_exit_openat(struct trace_event_raw_sys_exit* ctx)
 {
-	return trace_syscall_exit(ctx, OPENSNOOPD_ACTION_OPEN, &maps_open);
+	return trace_syscall_exit(ctx, SNOOPD_ACTION_OPEN, &maps_open);
 }
 
 /* ******************************************************************** */
@@ -151,7 +151,7 @@ int tracepoint__syscalls__sys_enter_unlink(struct trace_event_raw_sys_enter* ctx
 SEC("tracepoint/syscalls/sys_exit_unlink")
 int tracepoint__syscalls__sys_exit_unlink(struct trace_event_raw_sys_exit* ctx)
 {
-	return trace_syscall_exit(ctx, OPENSNOOPD_ACTION_UNLINK, &maps_unlink);
+	return trace_syscall_exit(ctx, SNOOPD_ACTION_UNLINK, &maps_unlink);
 }
 
 /* ******************************************************************** */
@@ -168,7 +168,7 @@ int tracepoint__syscalls__sys_enter_unlinkat(struct trace_event_raw_sys_enter* c
 SEC("tracepoint/syscalls/sys_exit_unlinkat")
 int tracepoint__syscalls__sys_exit_unlinkat(struct trace_event_raw_sys_exit* ctx)
 {
-	return trace_syscall_exit(ctx, OPENSNOOPD_ACTION_UNLINK, &maps_unlink);
+	return trace_syscall_exit(ctx, SNOOPD_ACTION_UNLINK, &maps_unlink);
 }
 
 /* ******************************************************************** */
@@ -185,7 +185,7 @@ int tracepoint__syscalls__sys_enter_chdir(struct trace_event_raw_sys_enter* ctx)
 SEC("tracepoint/syscalls/sys_exit_chdir")
 int tracepoint__syscalls__sys_exit_chdir(struct trace_event_raw_sys_exit* ctx)
 {
-	return trace_syscall_exit(ctx, OPENSNOOPD_ACTION_CHDIR, &maps_chdir);
+	return trace_syscall_exit(ctx, SNOOPD_ACTION_CHDIR, &maps_chdir);
 }
 
 /* ******************************************************************** */
@@ -202,7 +202,7 @@ int tracepoint__syscalls__sys_enter_mkdir(struct trace_event_raw_sys_enter* ctx)
 SEC("tracepoint/syscalls/sys_exit_mkdir")
 int tracepoint__syscalls__sys_exit_mkdir(struct trace_event_raw_sys_exit* ctx)
 {
-	return trace_syscall_exit(ctx, OPENSNOOPD_ACTION_MKDIR, &maps_mkdir);
+	return trace_syscall_exit(ctx, SNOOPD_ACTION_MKDIR, &maps_mkdir);
 }
 
 /* ******************************************************************** */
@@ -219,7 +219,7 @@ int tracepoint__syscalls__sys_enter_mkdirat(struct trace_event_raw_sys_enter* ct
 SEC("tracepoint/syscalls/sys_exit_mkdirat")
 int tracepoint__syscalls__sys_exit_mkdirat(struct trace_event_raw_sys_exit* ctx)
 {
-	return trace_syscall_exit(ctx, OPENSNOOPD_ACTION_MKDIR, &maps_mkdir);
+	return trace_syscall_exit(ctx, SNOOPD_ACTION_MKDIR, &maps_mkdir);
 }
 
 /* ******************************************************************** */
@@ -236,7 +236,7 @@ int tracepoint__syscalls__sys_enter_rmdir(struct trace_event_raw_sys_enter* ctx)
 SEC("tracepoint/syscalls/sys_exit_rmdir")
 int tracepoint__syscalls__sys_exit_rmdir(struct trace_event_raw_sys_exit* ctx)
 {
-	return trace_syscall_exit(ctx, OPENSNOOPD_ACTION_RMDIR, &maps_mkdir);
+	return trace_syscall_exit(ctx, SNOOPD_ACTION_RMDIR, &maps_mkdir);
 }
 
 /* ******************************************************************** */

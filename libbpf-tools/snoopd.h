@@ -2,20 +2,20 @@
 // Copyright (c) 2024 Rundata Systems, Gauteng, South Africa.
 //
 // Derived from opensnoop from https://github.com/iovisor/bcc
-#ifndef __OPENSNOOPD_H
-#define __OPENSNOOPD_H
+#ifndef __SNOOPD_H
+#define __SNOOPD_H
 
 #define TASK_COMM_LEN 16
 #define NAME_LEN 384
 #define INVALID_UID ((uid_t)-1)
 
-#define OPENSNOOPD_ACTION_ERROR     (0)
-#define OPENSNOOPD_ACTION_OPEN      (1)
-#define OPENSNOOPD_ACTION_UNLINK    (2)
-#define OPENSNOOPD_ACTION_RENAME    (3)
-#define OPENSNOOPD_ACTION_CHDIR     (4)
-#define OPENSNOOPD_ACTION_MKDIR     (5)
-#define OPENSNOOPD_ACTION_RMDIR     (6)
+#define SNOOPD_ACTION_ERROR     (0)
+#define SNOOPD_ACTION_OPEN      (1)
+#define SNOOPD_ACTION_UNLINK    (2)
+#define SNOOPD_ACTION_RENAME    (3) // TODO
+#define SNOOPD_ACTION_CHDIR     (4)
+#define SNOOPD_ACTION_MKDIR     (5)
+#define SNOOPD_ACTION_RMDIR     (6)
 
 struct args_t {
 	const char *fname;
@@ -34,4 +34,4 @@ struct exclusion_list {
 	const size_t len;
 };
 
-#endif /* __OPENSNOOPD_H */
+#endif /* __SNOOPD_H */

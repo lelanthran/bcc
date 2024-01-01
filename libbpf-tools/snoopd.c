@@ -12,8 +12,8 @@
 #include <unistd.h>
 #include <bpf/libbpf.h>
 #include <bpf/bpf.h>
-#include "opensnoopd.h"
-#include "opensnoopd.skel.h"
+#include "snoopd.h"
+#include "snoopd.skel.h"
 #include "btf_helpers.h"
 #include "trace_helpers.h"
 #ifdef USE_BLAZESYM
@@ -180,12 +180,12 @@ cleanup:
 /* Locations for the files we need. Maybe some later version will allow
  * specifying these on the command line but for now they're constants.
  */
-#define DIR_CONFIG      "/etc/opensnoopd"
-#define FILE_CONFIG     DIR_CONFIG "/" "opensnoopd.conf"
-#define DIR_LOG         "/var/log/opensnoopd"
+#define DIR_CONFIG      "/etc/snoopd"
+#define FILE_CONFIG     DIR_CONFIG "/" "snoopd.conf"
+#define DIR_LOG         "/var/log/snoopd"
 #define FILE_OUT        DIR_LOG "/" "output.log"
 #define FILE_ERR        DIR_LOG "/" "error.log"
-#define FILE_BIN        "/sbin/opensnoopd"
+#define FILE_BIN        "/sbin/snoopd"
 
 static void print_remove_message(void)
 {
@@ -217,7 +217,7 @@ static bool files_create(void)
 		const char *fname;
 		const char *content;
 	} files[] = {
-		{ FILE_CONFIG, "# Default configuration for opensnoopd.\n"
+		{ FILE_CONFIG, "# Default configuration for snoopd.\n"
 				"\n"
 				"# Only files opened with any of the following flags will be monitored\n"
 				" oflags = O_WRONLY O_RDWR  O_CREAT O_APPEND\n"
@@ -227,8 +227,8 @@ static bool files_create(void)
 				" exclude = ^/sys \n"
 				" exclude = ^/tmp \n"
 				" exclude = ^/dev \n" },
-		{ FILE_OUT, " Installing opensnoopd ...\n" },
-		{ FILE_ERR, " Installing opensnoopd ...\n" },
+		{ FILE_OUT, " Installing snoopd ...\n" },
+		{ FILE_ERR, " Installing snoopd ...\n" },
 	};
 
 	for (size_t i=0; i<sizeof files/sizeof *files; i++) {
@@ -434,19 +434,19 @@ static struct env {
 	.verbose = false,
 };
 
-const char *argp_program_version = "opensnoopd 0.1";
+const char *argp_program_version = "snoopd 0.1";
 const char *argp_program_bug_address =
 	"https://github.com/iovisor/bcc/tree/master/libbpf-tools";
 const char argp_program_doc[] =
 "Trace open family syscalls\n"
 "\n"
-"USAGE: opensnoopd [-d] [-v] [-I]\n"
+"USAGE: snoopd [-d] [-v] [-I]\n"
 "\n"
 "EXAMPLES:\n"
-"    ./opensnoopd           # log all open() syscalls.\n"
-"    ./opensnoopd -d        # Daemonize, then log all open() syscalls.\n"
-"    ./opensnoopd -v        # Don't be the soul of wit.\n"
-"    ./opensnoopd -I        # Install opensnoopd to the local machine.\n"
+"    ./snoopd           # log all open() syscalls.\n"
+"    ./snoopd -d        # Daemonize, then log all open() syscalls.\n"
+"    ./snoopd -v        # Don't be the soul of wit.\n"
+"    ./snoopd -I        # Install snoopd to the local machine.\n"
 "";
 
 static const struct argp_option opts[] = {
@@ -474,12 +474,12 @@ static error_t parse_arg(int key, char *arg, struct argp_state *state)
 			if (!(dirs_create())
 					|| !(files_create())
 					|| !(copy_program())) {
-				fprintf(stderr, "Failed to install opensnoopd, aborting\n");
+				fprintf(stderr, "Failed to install snoopd, aborting\n");
 				print_remove_message();
 				exit(EXIT_FAILURE);
 			}
 			printf("Program installed successfully\n");
-			printf("Modify the init system files to run /sbin/opensnoopd on bootup\n");
+			printf("Modify the init system files to run /sbin/snoopd on bootup\n");
 			exit(EXIT_SUCCESS);
 
 		default:
@@ -544,7 +544,7 @@ int main(int argc, char **argv)
 		.doc = argp_program_doc,
 	};
 	struct perf_buffer *pb = NULL;
-	struct opensnoopd_bpf *obj = NULL;
+	struct snoopd_bpf *obj = NULL;
 	int err = argp_parse(&argp, argc, argv, 0, NULL, NULL);
 	if (err)
 		return err;
@@ -563,7 +563,7 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	obj = opensnoopd_bpf__open_opts(&open_opts);
+	obj = snoopd_bpf__open_opts(&open_opts);
 	if (!obj) {
 		fprintf(stderr, "failed to open BPF object\n");
 		return 1;
@@ -588,13 +588,13 @@ int main(int argc, char **argv)
 	}
 #endif
 
-	err = opensnoopd_bpf__load(obj);
+	err = snoopd_bpf__load(obj);
 	if (err) {
 		fprintf(stderr, "failed to load BPF object: %d\n", err);
 		goto cleanup;
 	}
 
-	err = opensnoopd_bpf__attach(obj);
+	err = snoopd_bpf__attach(obj);
 	if (err) {
 		fprintf(stderr, "failed to attach BPF programs\n");
 		goto cleanup;
@@ -633,7 +633,7 @@ int main(int argc, char **argv)
 
 cleanup:
 	perf_buffer__free(pb);
-	opensnoopd_bpf__destroy(obj);
+	snoopd_bpf__destroy(obj);
 	cleanup_core_btf(&open_opts);
 #ifdef USE_BLAZESYM
 	blazesym_free(symbolizer);
