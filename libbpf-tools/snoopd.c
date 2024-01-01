@@ -520,7 +520,7 @@ void handle_event(void *ctx, int cpu, void *data, __u32 data_sz)
 	/* Copy data as alignment in the perf buffer isn't guaranteed. */
 	memcpy(&e, data, sizeof(e));
 
-#if 0
+#if 1
 	if (regexes_exclude(e.fname))
 		return;
 #endif
