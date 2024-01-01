@@ -45,3 +45,19 @@ done > perf_test.txt
 
 echo Killing $SPID
 kill $SPID
+
+# The last time this test was run, the results were as follows:
+#
+# Timing without snoopd running ...
+#
+# real    3m24.789s
+# user    0m2.253s
+# sys     0m1.309s
+# Starting snoopd ...
+# Timing with snoopd running ...
+#
+# real    3m25.995s
+# user    0m2.266s
+# sys     0m2.305s
+# Killing 38558
+#

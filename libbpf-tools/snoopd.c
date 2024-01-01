@@ -226,7 +226,12 @@ static bool files_create(void)
 				" exclude = ^/proc \n"
 				" exclude = ^/sys \n"
 				" exclude = ^/tmp \n"
-				" exclude = ^/dev \n" },
+				" exclude = ^/dev \n"
+				"\n"
+				"# Specify output FIFOs. More than one can be specified. It will\n"
+				"# be created if it does not exist. All FIFOs are created in\n"
+				" fifo = 
+				" \n" },
 		{ FILE_OUT, " Installing snoopd ...\n" },
 		{ FILE_ERR, " Installing snoopd ...\n" },
 	};
