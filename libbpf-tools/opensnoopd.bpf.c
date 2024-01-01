@@ -44,261 +44,203 @@ struct {
 } events SEC(".maps");
 
 static __always_inline
-int trace_open_enter(struct trace_event_raw_sys_enter* ctx)
+int trace_syscall_enter(struct trace_event_raw_sys_enter* ctx,
+		const char *fname, int flags,
+		void *map)
 {
-	/* *****************************************************************
-	 * Gotta be honest, this doesn't look correct for my use-case.
-	 * If a process $PID opens two files in two separate threads
-	 * it's quite probable that _exit gets called for the second
-	 * _enter before it gets called for the first _enter.
-	 */
+   // bpf_trace_printk("1:%s:%i\n", 9, fname, flags);
 	struct args_t args = {};
-	args.fname = (const char *)ctx->args[1];
-	args.flags = (int)ctx->args[2];
+	args.fname = fname;
+	args.flags = flags;
 	if (args.flags & targ_oflags) {
+		// bpf_trace_printk("E:%s:%i\n", 9, fname, flags);
 		u32 pid = bpf_get_current_pid_tgid();
-		bpf_map_update_elem(&maps_open, &pid, &args, 0);
+		bpf_map_update_elem((struct bpf_map *)map, &pid, &args, 0);
 	}
 	return 0;
 }
 
 static __always_inline
-int trace_open_exit(struct trace_event_raw_sys_exit* ctx)
+int trace_syscall_exit(struct trace_event_raw_sys_exit* ctx,
+		int action,
+		void *map)
 {
 	struct event event = {};
 	struct args_t *ap;
 
 	u32 pid = bpf_get_current_pid_tgid();
-	ap = bpf_map_lookup_elem(&maps_open, &pid);
+	ap = bpf_map_lookup_elem((struct bpf_map *)map, &pid);
 	if (!ap)
 		return 0;	/* missed entry */
 
+	// bpf_trace_printk("e:%i:%i\n", 9, action, ctx->ret);
 	/* On error, ignore the open call */
-	if (ctx->ret > 0) {
+	if (ctx->ret >= 0) {
 		/* Event data */
 		bpf_probe_read_user_str(&event.fname, sizeof(event.fname), ap->fname);
 		event.flags = ap->flags;
 		event.ret = ctx->ret;
-		event.action = OPENSNOOPD_ACTION_OPEN;
+		event.action = action;
 
 		/* Emit event */
+
 		bpf_perf_event_output(ctx, &events, BPF_F_CURRENT_CPU, &event, sizeof(event));
 	}
 	/* Clean up the hashmap */
-	bpf_map_delete_elem(&maps_open, &pid);
+	bpf_map_delete_elem((struct bpf_map *)map, &pid);
 	return 0;
 }
 
-
-static __always_inline
-int trace_unlink_enter(struct trace_event_raw_sys_enter* ctx, const char *fname)
-{
-	struct args_t args = {};
-	args.fname = fname;
-	/* We really need a way to filter these */
-	u32 pid = bpf_get_current_pid_tgid();
-	bpf_map_update_elem(&maps_unlink, &pid, &args, 0);
-	return 0;
-}
-
-static __always_inline
-int trace_unlink_exit(struct trace_event_raw_sys_exit* ctx)
-{
-	struct event event = {};
-	struct args_t *ap;
-
-	u32 pid = bpf_get_current_pid_tgid();
-	ap = bpf_map_lookup_elem(&maps_unlink, &pid);
-	if (!ap)
-		return 0;	/* missed entry */
-
-	/* On error, ignore the syscall */
-	if (ctx->ret == 0) {
-		/* Event data */
-		bpf_probe_read_user_str(&event.fname, sizeof(event.fname), ap->fname);
-		event.flags = 0;
-		event.ret = ctx->ret;
-		event.action = OPENSNOOPD_ACTION_UNLINK;
-
-		/* Emit event */
-		bpf_perf_event_output(ctx, &events, BPF_F_CURRENT_CPU, &event, sizeof(event));
-	}
-	/* Clean up the hashmap */
-	bpf_map_delete_elem(&maps_unlink, &pid);
-	return 0;
-}
-
-
-static __always_inline
-int trace_chdir_enter(struct trace_event_raw_sys_enter* ctx)
-{
-	struct args_t args = {};
-	args.fname = (const char *)ctx->args[0];
-	u32 pid = bpf_get_current_pid_tgid();
-	bpf_map_update_elem(&maps_chdir, &pid, &args, 0);
-	return 0;
-}
-
-static __always_inline
-int trace_chdir_exit(struct trace_event_raw_sys_exit* ctx)
-{
-	struct event event = {};
-	struct args_t *ap;
-
-	u32 pid = bpf_get_current_pid_tgid();
-	ap = bpf_map_lookup_elem(&maps_chdir, &pid);
-	if (!ap)
-		return 0;	/* missed entry */
-
-	/* On error, ignore the syscall */
-	if (ctx->ret == 0) {
-		/* Event data */
-		bpf_probe_read_user_str(&event.fname, sizeof(event.fname), ap->fname);
-		event.flags = 0;
-		event.ret = ctx->ret;
-		event.action = OPENSNOOPD_ACTION_CHDIR;
-
-		/* Emit event */
-		bpf_perf_event_output(ctx, &events, BPF_F_CURRENT_CPU, &event, sizeof(event));
-	}
-	/* Clean up the hashmap */
-	bpf_map_delete_elem(&maps_chdir, &pid);
-	return 0;
-}
-
-
-static __always_inline
-int trace_mkdir_enter(struct trace_event_raw_sys_enter* ctx, const char *fname)
-{
-	struct args_t args = {};
-	args.fname = fname;
-	u32 pid = bpf_get_current_pid_tgid();
-	bpf_map_update_elem(&maps_mkdir, &pid, &args, 0);
-	return 0;
-}
-
-static __always_inline
-int trace_mkdir_exit(struct trace_event_raw_sys_exit* ctx)
-{
-	struct event event = {};
-	struct args_t *ap;
-
-	u32 pid = bpf_get_current_pid_tgid();
-	ap = bpf_map_lookup_elem(&maps_mkdir, &pid);
-	if (!ap)
-		return 0;	/* missed entry */
-
-	/* On error, ignore the syscall */
-	if (ctx->ret == 0) {
-		/* Event data */
-		bpf_probe_read_user_str(&event.fname, sizeof(event.fname), ap->fname);
-		event.flags = 0;
-		event.ret = ctx->ret;
-		event.action = OPENSNOOPD_ACTION_MKDIR;
-
-		/* Emit event */
-		bpf_perf_event_output(ctx, &events, BPF_F_CURRENT_CPU, &event, sizeof(event));
-	}
-	/* Clean up the hashmap */
-	bpf_map_delete_elem(&maps_mkdir, &pid);
-	return 0;
-}
-
-
-#if 0
 /* Cannot easily trace this call, dunno what the $PWD is. Tracing relative
- * openat calls is non-trivial and involves tracking chdir by PID in a
+ * fs calls is non-trivial and involves tracking chdir by PID in a
  * syscall_enter_chdir() function, then looking up that PID in the
  * syscall_enter_open() function, and then cleaning that chdir map in
  * a syscall_enter_process_exit() function.
  *
  * For now, let it get indexed by the filetree walker. It'll still show up
  * in the results, it just won't show up immediately.
+ *
+ * Due to watching chdir, rmdir and mkdir, the indexer at least has a clue
+ * about the most recently changed and visited directories, so won't need
+ * to walk the entire tree.
  */
+
 SEC("tracepoint/syscalls/sys_enter_open")
 int tracepoint__syscalls__sys_enter_open(struct trace_event_raw_sys_enter* ctx)
 {
-	return trace_open_enter(ctx);
+	return trace_syscall_enter(ctx,
+			(const char *)ctx->args[0],
+			(int)ctx->args[1],
+			&maps_open);
 }
 
 SEC("tracepoint/syscalls/sys_exit_open")
 int tracepoint__syscalls__sys_exit_open(struct trace_event_raw_sys_exit* ctx)
 {
-	return trace_open_exit(ctx);
+	return trace_syscall_exit(ctx, OPENSNOOPD_ACTION_OPEN, &maps_open);
 }
-#endif
 
+/* ******************************************************************** */
 
 SEC("tracepoint/syscalls/sys_enter_openat")
 int tracepoint__syscalls__sys_enter_openat(struct trace_event_raw_sys_enter* ctx)
 {
-	return trace_open_enter(ctx);
+	return trace_syscall_enter(ctx,
+			(const char *)ctx->args[1],
+			(int)ctx->args[2],
+			&maps_open);
 }
+
 SEC("tracepoint/syscalls/sys_exit_openat")
 int tracepoint__syscalls__sys_exit_openat(struct trace_event_raw_sys_exit* ctx)
 {
-	return trace_open_exit(ctx);
+	return trace_syscall_exit(ctx, OPENSNOOPD_ACTION_OPEN, &maps_open);
 }
 
+/* ******************************************************************** */
 
 SEC("tracepoint/syscalls/sys_enter_unlink")
 int tracepoint__syscalls__sys_enter_unlink(struct trace_event_raw_sys_enter* ctx)
 {
-	return trace_unlink_enter(ctx, (const char *)ctx->args[0]);
+	return trace_syscall_enter(ctx,
+			(const char *)ctx->args[0],
+			targ_oflags,
+			&maps_unlink);
 }
+
 SEC("tracepoint/syscalls/sys_exit_unlink")
 int tracepoint__syscalls__sys_exit_unlink(struct trace_event_raw_sys_exit* ctx)
 {
-	return trace_unlink_exit(ctx);
+	return trace_syscall_exit(ctx, OPENSNOOPD_ACTION_UNLINK, &maps_unlink);
 }
 
+/* ******************************************************************** */
 
 SEC("tracepoint/syscalls/sys_enter_unlinkat")
 int tracepoint__syscalls__sys_enter_unlinkat(struct trace_event_raw_sys_enter* ctx)
 {
-	return trace_unlink_enter(ctx, (const char *)ctx->args[1]);
+	return trace_syscall_enter(ctx,
+			(const char *)ctx->args[1],
+			targ_oflags,
+			&maps_unlink);
 }
+
 SEC("tracepoint/syscalls/sys_exit_unlinkat")
 int tracepoint__syscalls__sys_exit_unlinkat(struct trace_event_raw_sys_exit* ctx)
 {
-	return trace_unlink_exit(ctx);
+	return trace_syscall_exit(ctx, OPENSNOOPD_ACTION_UNLINK, &maps_unlink);
 }
 
+/* ******************************************************************** */
 
 SEC("tracepoint/syscalls/sys_enter_chdir")
 int tracepoint__syscalls__sys_enter_chdir(struct trace_event_raw_sys_enter* ctx)
 {
-	return trace_chdir_enter(ctx);
+	return trace_syscall_enter(ctx,
+			(const char *)ctx->args[0],
+			targ_oflags,
+			&maps_chdir);
 }
+
 SEC("tracepoint/syscalls/sys_exit_chdir")
 int tracepoint__syscalls__sys_exit_chdir(struct trace_event_raw_sys_exit* ctx)
 {
-	return trace_chdir_exit(ctx);
+	return trace_syscall_exit(ctx, OPENSNOOPD_ACTION_CHDIR, &maps_chdir);
 }
 
+/* ******************************************************************** */
 
 SEC("tracepoint/syscalls/sys_enter_mkdir")
 int tracepoint__syscalls__sys_enter_mkdir(struct trace_event_raw_sys_enter* ctx)
 {
-	return trace_mkdir_enter(ctx, (const char *)ctx->args[0]);
+	return trace_syscall_enter(ctx,
+			(const char *)ctx->args[0],
+			targ_oflags,
+			&maps_mkdir);
 }
+
 SEC("tracepoint/syscalls/sys_exit_mkdir")
 int tracepoint__syscalls__sys_exit_mkdir(struct trace_event_raw_sys_exit* ctx)
 {
-	return trace_mkdir_exit(ctx);
+	return trace_syscall_exit(ctx, OPENSNOOPD_ACTION_MKDIR, &maps_mkdir);
 }
 
+/* ******************************************************************** */
 
-SEC("tracepoint/syscalls/sys_enter_mkdir")
+SEC("tracepoint/syscalls/sys_enter_mkdirat")
 int tracepoint__syscalls__sys_enter_mkdirat(struct trace_event_raw_sys_enter* ctx)
 {
-	return trace_mkdir_enter(ctx, (const char *)ctx->args[0]);
+	return trace_syscall_enter(ctx,
+			(const char *)ctx->args[1],
+			targ_oflags,
+			&maps_mkdir);
 }
-SEC("tracepoint/syscalls/sys_exit_mkdir")
+
+SEC("tracepoint/syscalls/sys_exit_mkdirat")
 int tracepoint__syscalls__sys_exit_mkdirat(struct trace_event_raw_sys_exit* ctx)
 {
-	return trace_mkdir_exit(ctx);
+	return trace_syscall_exit(ctx, OPENSNOOPD_ACTION_MKDIR, &maps_mkdir);
 }
+
+/* ******************************************************************** */
+
+SEC("tracepoint/syscalls/sys_enter_rmdir")
+int tracepoint__syscalls__sys_enter_rmdir(struct trace_event_raw_sys_enter* ctx)
+{
+	return trace_syscall_enter(ctx,
+			(const char *)ctx->args[0],
+			targ_oflags,
+			&maps_mkdir);
+}
+
+SEC("tracepoint/syscalls/sys_exit_rmdir")
+int tracepoint__syscalls__sys_exit_rmdir(struct trace_event_raw_sys_exit* ctx)
+{
+	return trace_syscall_exit(ctx, OPENSNOOPD_ACTION_RMDIR, &maps_mkdir);
+}
+
+/* ******************************************************************** */
+
 
 
 

@@ -15,6 +15,7 @@
 #define OPENSNOOPD_ACTION_RENAME    (3)
 #define OPENSNOOPD_ACTION_CHDIR     (4)
 #define OPENSNOOPD_ACTION_MKDIR     (5)
+#define OPENSNOOPD_ACTION_RMDIR     (6)
 
 struct args_t {
 	const char *fname;

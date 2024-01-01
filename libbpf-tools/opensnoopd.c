@@ -520,7 +520,7 @@ void handle_event(void *ctx, int cpu, void *data, __u32 data_sz)
 	/* Copy data as alignment in the perf buffer isn't guaranteed. */
 	memcpy(&e, data, sizeof(e));
 
-#if 1
+#if 0
 	if (regexes_exclude(e.fname))
 		return;
 #endif
@@ -572,6 +572,7 @@ int main(int argc, char **argv)
 	/* initialize global data (filtering options) */
 	obj->rodata->targ_oflags = g_oflags;
 
+#if 0
 	/* aarch64 and riscv64 don't have open syscall */
 	if (!tracepoint_exists("syscalls", "sys_enter_open")) {
 		bpf_program__set_autoload(obj->progs.tracepoint__syscalls__sys_enter_openat, false);
@@ -585,6 +586,7 @@ int main(int argc, char **argv)
 		bpf_program__set_autoload(obj->progs.tracepoint__syscalls__sys_enter_unlinkat, false);
 		bpf_program__set_autoload(obj->progs.tracepoint__syscalls__sys_exit_unlinkat, false);
 	}
+#endif
 
 	err = opensnoopd_bpf__load(obj);
 	if (err) {
