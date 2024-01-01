@@ -434,17 +434,17 @@ static struct env {
 	.verbose = false,
 };
 
-const char *argp_program_version = "snoopd 0.1";
+const char *argp_program_version = "snoopd 0.1.1";
 const char *argp_program_bug_address =
-	"https://github.com/iovisor/bcc/tree/master/libbpf-tools";
+	"https://github.com/lelanthran/bcc/tree/master/libbpf-tools";
 const char argp_program_doc[] =
 "Trace open family syscalls\n"
 "\n"
 "USAGE: snoopd [-d] [-v] [-I]\n"
 "\n"
 "EXAMPLES:\n"
-"    ./snoopd           # log all open() syscalls.\n"
-"    ./snoopd -d        # Daemonize, then log all open() syscalls.\n"
+"    ./snoopd           # log all fs-mutating syscalls.\n"
+"    ./snoopd -d        # Daemonize, then log all fs-mutating syscalls.\n"
 "    ./snoopd -v        # Don't be the soul of wit.\n"
 "    ./snoopd -I        # Install snoopd to the local machine.\n"
 "";
