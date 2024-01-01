@@ -577,6 +577,10 @@ int main(int argc, char **argv)
 		bpf_program__set_autoload(obj->progs.tracepoint__syscalls__sys_enter_openat, false);
 		bpf_program__set_autoload(obj->progs.tracepoint__syscalls__sys_exit_openat, false);
 	}
+	if (!tracepoint_exists("syscalls", "sys_enter_unlink")) {
+		bpf_program__set_autoload(obj->progs.tracepoint__syscalls__sys_enter_unlinkat, false);
+		bpf_program__set_autoload(obj->progs.tracepoint__syscalls__sys_exit_unlinkat, false);
+	}
 
 	err = opensnoopd_bpf__load(obj);
 	if (err) {
