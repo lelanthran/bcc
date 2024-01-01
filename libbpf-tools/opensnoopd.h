@@ -14,6 +14,7 @@
 #define OPENSNOOPD_ACTION_UNLINK    (2)
 #define OPENSNOOPD_ACTION_RENAME    (3)
 #define OPENSNOOPD_ACTION_CHDIR     (4)
+#define OPENSNOOPD_ACTION_MKDIR     (5)
 
 struct args_t {
 	const char *fname;

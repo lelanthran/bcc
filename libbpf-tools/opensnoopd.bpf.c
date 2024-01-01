@@ -30,6 +30,14 @@ struct {
 } maps_chdir SEC(".maps");
 
 struct {
+	__uint(type, BPF_MAP_TYPE_HASH);
+	__uint(max_entries, 10240);
+	__type(key, u32);
+	__type(value, struct args_t);
+} maps_mkdir SEC(".maps");
+
+
+struct {
 	__uint(type, BPF_MAP_TYPE_PERF_EVENT_ARRAY);
 	__uint(key_size, sizeof(u32));
 	__uint(value_size, sizeof(u32));
@@ -159,6 +167,44 @@ int trace_chdir_exit(struct trace_event_raw_sys_exit* ctx)
 }
 
 
+static __always_inline
+int trace_mkdir_enter(struct trace_event_raw_sys_enter* ctx, const char *fname)
+{
+	struct args_t args = {};
+	args.fname = fname;
+	u32 pid = bpf_get_current_pid_tgid();
+	bpf_map_update_elem(&maps_mkdir, &pid, &args, 0);
+	return 0;
+}
+
+static __always_inline
+int trace_mkdir_exit(struct trace_event_raw_sys_exit* ctx)
+{
+	struct event event = {};
+	struct args_t *ap;
+
+	u32 pid = bpf_get_current_pid_tgid();
+	ap = bpf_map_lookup_elem(&maps_mkdir, &pid);
+	if (!ap)
+		return 0;	/* missed entry */
+
+	/* On error, ignore the syscall */
+	if (ctx->ret == 0) {
+		/* Event data */
+		bpf_probe_read_user_str(&event.fname, sizeof(event.fname), ap->fname);
+		event.flags = 0;
+		event.ret = ctx->ret;
+		event.action = OPENSNOOPD_ACTION_MKDIR;
+
+		/* Emit event */
+		bpf_perf_event_output(ctx, &events, BPF_F_CURRENT_CPU, &event, sizeof(event));
+	}
+	/* Clean up the hashmap */
+	bpf_map_delete_elem(&maps_mkdir, &pid);
+	return 0;
+}
+
+
 #if 0
 /* Cannot easily trace this call, dunno what the $PWD is. Tracing relative
  * openat calls is non-trivial and involves tracking chdir by PID in a
@@ -228,6 +274,30 @@ SEC("tracepoint/syscalls/sys_exit_chdir")
 int tracepoint__syscalls__sys_exit_chdir(struct trace_event_raw_sys_exit* ctx)
 {
 	return trace_chdir_exit(ctx);
+}
+
+
+SEC("tracepoint/syscalls/sys_enter_mkdir")
+int tracepoint__syscalls__sys_enter_mkdir(struct trace_event_raw_sys_enter* ctx)
+{
+	return trace_mkdir_enter(ctx, (const char *)ctx->args[0]);
+}
+SEC("tracepoint/syscalls/sys_exit_mkdir")
+int tracepoint__syscalls__sys_exit_mkdir(struct trace_event_raw_sys_exit* ctx)
+{
+	return trace_mkdir_exit(ctx);
+}
+
+
+SEC("tracepoint/syscalls/sys_enter_mkdir")
+int tracepoint__syscalls__sys_enter_mkdirat(struct trace_event_raw_sys_enter* ctx)
+{
+	return trace_mkdir_enter(ctx, (const char *)ctx->args[0]);
+}
+SEC("tracepoint/syscalls/sys_exit_mkdir")
+int tracepoint__syscalls__sys_exit_mkdirat(struct trace_event_raw_sys_exit* ctx)
+{
+	return trace_mkdir_exit(ctx);
 }
 
 
